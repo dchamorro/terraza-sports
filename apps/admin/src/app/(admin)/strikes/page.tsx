@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   PageHeader, Card, Table, Thead, Th, Tbody, Td, Badge, EmptyState,
 } from "@/components/ui";
@@ -8,11 +8,9 @@ import { WaiveStrikeButton } from "./waive-strike-button";
 import { rel } from "@/lib/cn";
 
 export default async function StrikesPage() {
-  const supabase = await createClient();
-
   const [{ data: flags }, { data: strikes }] = await Promise.all([
     // Unconfirmed abuse flags — admin must confirm before a strike is issued.
-    supabase
+    supabaseAdmin
       .from("abuse_flags")
       .select(
         `id, offense_type, detected_at,
@@ -25,7 +23,7 @@ export default async function StrikesPage() {
       .order("detected_at", { ascending: false }),
 
     // Active strikes.
-    supabase
+    supabaseAdmin
       .from("strikes")
       .select(
         `id, offense_type, status, issued_at, erased_at, waived_at, waiver_reason,

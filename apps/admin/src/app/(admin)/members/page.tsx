@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   PageHeader, Card, Table, Thead, Th, Tbody, Td, Badge, EmptyState,
 } from "@/components/ui";
@@ -11,9 +11,8 @@ export default async function MembersPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const { q } = await searchParams;
-  const supabase = await createClient();
 
-  let query = supabase
+  let query = supabaseAdmin
     .from("members")
     .select(
       `id, full_name, email, role, age_tier, is_dependent, is_active, date_of_birth,

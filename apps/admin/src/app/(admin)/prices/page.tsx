@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { isSportsManager } from "@/lib/roles";
 import {
@@ -9,11 +10,10 @@ import { PriceEditForm } from "./price-edit-form";
 import { rel } from "@/lib/cn";
 
 export default async function PricesPage() {
+  // Auth check via session client.
   const supabase = await createClient();
-
-  // Guard: Sports Manager only.
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: member } = await supabase
+  const { data: member } = await supabaseAdmin
     .from("members")
     .select("role")
     .eq("auth_user_id", user!.id)
@@ -24,11 +24,11 @@ export default async function PricesPage() {
   }
 
   const [{ data: prices }, { data: auditLog }] = await Promise.all([
-    supabase
+    supabaseAdmin
       .from("price_items")
       .select("id, key, label, price_nio, is_active, updated_at")
       .order("key"),
-    supabase
+    supabaseAdmin
       .from("price_item_audit")
       .select(
         `id, old_price_nio, new_price_nio, changed_at,

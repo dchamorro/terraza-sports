@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   PageHeader, Card, Table, Thead, Th, Tbody, Td, Badge, EmptyState,
 } from "@/components/ui";
@@ -12,9 +12,8 @@ export default async function BookingsPage({
   searchParams: Promise<{ status?: string; date?: string }>;
 }) {
   const { status, date } = await searchParams;
-  const supabase = await createClient();
 
-  let query = supabase
+  let query = supabaseAdmin
     .from("bookings")
     .select(
       `id, status, is_guest_booking, guest_name, checked_in_at, created_at,

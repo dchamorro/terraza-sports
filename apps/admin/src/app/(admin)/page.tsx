@@ -1,10 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { PageHeader, StatCard, Card, Table, Thead, Th, Tbody, Td, Badge } from "@/components/ui";
 import { formatNio, formatDateTime } from "@/lib/format";
 import { rel } from "@/lib/cn";
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
 
   const [
@@ -14,26 +13,26 @@ export default async function DashboardPage() {
     { count: openFlags },
     { data: recentBookings },
   ] = await Promise.all([
-    supabase
+    supabaseAdmin
       .from("bookings")
       .select("*", { count: "exact", head: true })
       .eq("status", "pending_approval"),
-    supabase
+    supabaseAdmin
       .from("bookings")
       .select("*", { count: "exact", head: true })
       .gte("created_at", `${today}T00:00:00Z`)
       .lte("created_at", `${today}T23:59:59Z`),
-    supabase
+    supabaseAdmin
       .from("sanctions")
       .select("*", { count: "exact", head: true })
       .eq("is_active", true)
       .neq("sanction_type", "warning"),
-    supabase
+    supabaseAdmin
       .from("abuse_flags")
       .select("*", { count: "exact", head: true })
       .is("confirmed_at", null)
       .is("dismissed_at", null),
-    supabase
+    supabaseAdmin
       .from("bookings")
       .select(
         `id, status, created_at,

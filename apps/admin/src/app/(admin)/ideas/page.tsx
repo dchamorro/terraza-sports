@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   PageHeader, Card, Table, Thead, Th, Tbody, Td, Badge, EmptyState,
 } from "@/components/ui";
@@ -12,9 +12,8 @@ export default async function IdeasPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const { status } = await searchParams;
-  const supabase = await createClient();
 
-  let query = supabase
+  let query = supabaseAdmin
     .from("ideas_inbox")
     .select(
       `id, title, body, status, submitter_role, created_at, triage_note,

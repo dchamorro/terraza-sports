@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   PageHeader, Card, Table, Thead, Th, Tbody, Td, Badge, EmptyState,
 } from "@/components/ui";
@@ -7,9 +7,7 @@ import { ApproveDeclineButtons } from "./approve-decline-buttons";
 import { rel } from "@/lib/cn";
 
 export default async function ApprovalsPage() {
-  const supabase = await createClient();
-
-  const { data: pending } = await supabase
+  const { data: pending } = await supabaseAdmin
     .from("bookings")
     .select(
       `id, is_guest_booking, guest_name, guest_email, created_at,

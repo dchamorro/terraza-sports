@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   PageHeader, Card, Table, Thead, Th, Tbody, Td, EmptyState,
 } from "@/components/ui";
@@ -7,9 +7,7 @@ import { RemoveHolidayButton } from "./remove-holiday-button";
 import { rel } from "@/lib/cn";
 
 export default async function HolidaysPage() {
-  const supabase = await createClient();
-
-  const { data: holidays } = await supabase
+  const { data: holidays } = await supabaseAdmin
     .from("holiday_calendar")
     .select("id, date, description, created_at, members!inner(full_name)")
     .order("date", { ascending: true });
