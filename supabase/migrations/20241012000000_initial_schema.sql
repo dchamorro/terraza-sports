@@ -162,10 +162,10 @@ create table slots (
   status        slot_status not null default 'available',
 
   constraint slots_resource_starts_unique unique (resource_id, starts_at),
-  -- Operating hours: 05:00–22:00 Managua (UTC-6). UTC hour must be in [11,4] mod 24.
-  -- Equivalent: (utc_hour + 18) % 24 < 17  →  stored as a simpler numeric range check.
+  -- Operating hours: 05:00–21:00 Managua (UTC-6, last slot starts 21:00).
+  -- UTC equivalents: 11:00–03:00 UTC. Mapped to [0,16] via (utc_hour+18)%24 in [5,21].
   constraint slots_operating_hours check (
-    (extract(hour from starts_at)::int + 18) % 24 < 17
+    (extract(hour from starts_at)::int + 18) % 24 between 5 and 21
   )
 );
 
