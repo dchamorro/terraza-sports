@@ -4,11 +4,6 @@
 -- America/Managua (UTC-6) for display.
 -- ============================================================
 
--- Enable required extensions
-create extension if not exists "uuid-ossp";
-create extension if not exists "pg_cron";
-create extension if not exists "pgcrypto";
-
 -- ============================================================
 -- ENUMS
 -- ============================================================
@@ -84,7 +79,7 @@ create type app_role as enum (
 
 -- Households group Members and Dependents for the peak-hour cap.
 create table households (
-  id          uuid primary key default uuid_generate_v4(),
+  id          uuid primary key default gen_random_uuid(),
   name        text not null,
   created_at  timestamptz not null default now()
 );
@@ -92,7 +87,7 @@ create table households (
 -- Members are synced from the club's external system.
 -- auth.users.id is the Supabase Auth UID.
 create table members (
-  id              uuid primary key default uuid_generate_v4(),
+  id              uuid primary key default gen_random_uuid(),
   auth_user_id    uuid unique references auth.users(id) on delete set null,
   household_id    uuid not null references households(id),
   external_ref    text unique,          -- id from the club's member system
@@ -132,7 +127,7 @@ create trigger members_updated_at
 -- ============================================================
 
 create table resources (
-  id            uuid primary key default uuid_generate_v4(),
+  id            uuid primary key default gen_random_uuid(),
   name          text not null,
   resource_type resource_type not null,
   is_active     boolean not null default true,
@@ -145,7 +140,7 @@ create table resources (
 -- ============================================================
 
 create table holiday_calendar (
-  id          uuid primary key default uuid_generate_v4(),
+  id          uuid primary key default gen_random_uuid(),
   date        date not null unique,
   description text,
   created_by  uuid not null references members(id),
@@ -160,16 +155,17 @@ create table holiday_calendar (
 -- ============================================================
 
 create table slots (
-  id            uuid primary key default uuid_generate_v4(),
+  id            uuid primary key default gen_random_uuid(),
   resource_id   uuid not null references resources(id),
   starts_at     timestamptz not null,   -- UTC; always on the hour
-  ends_at       timestamptz not null generated always as (starts_at + interval '1 hour') stored,
+  ends_at       timestamptz not null,   -- always starts_at + 1 hour; set by insert
   status        slot_status not null default 'available',
 
   constraint slots_resource_starts_unique unique (resource_id, starts_at),
+  -- Operating hours: 05:00–22:00 Managua (UTC-6). UTC hour must be in [11,4] mod 24.
+  -- Equivalent: (utc_hour + 18) % 24 < 17  →  stored as a simpler numeric range check.
   constraint slots_operating_hours check (
-    extract(hour from starts_at at time zone 'America/Managua') >= 5
-    and extract(hour from starts_at at time zone 'America/Managua') < 22
+    (extract(hour from starts_at)::int + 18) % 24 < 17
   )
 );
 
@@ -181,7 +177,7 @@ create index slots_resource_starts_idx on slots (resource_id, starts_at);
 -- ============================================================
 
 create table price_items (
-  id          uuid primary key default uuid_generate_v4(),
+  id          uuid primary key default gen_random_uuid(),
   key         text not null unique,   -- e.g. 'tennis_court', 'court_lights', 'lesson'
   label       text not null,
   price_nio   numeric(10,2) not null check (price_nio >= 0),
@@ -191,7 +187,7 @@ create table price_items (
 );
 
 create table price_item_audit (
-  id              uuid primary key default uuid_generate_v4(),
+  id              uuid primary key default gen_random_uuid(),
   price_item_id   uuid not null references price_items(id),
   old_price_nio   numeric(10,2),
   new_price_nio   numeric(10,2) not null,
@@ -221,7 +217,7 @@ create trigger price_items_audit
 -- ============================================================
 
 create table provider_availability (
-  id            uuid primary key default uuid_generate_v4(),
+  id            uuid primary key default gen_random_uuid(),
   provider_id   uuid not null references members(id),
   slot_id       uuid not null references slots(id),
   addon_type    addon_type not null check (addon_type in ('lesson', 'sparring')),
@@ -235,7 +231,7 @@ create table provider_availability (
 -- ============================================================
 
 create table bookings (
-  id                  uuid primary key default uuid_generate_v4(),
+  id                  uuid primary key default gen_random_uuid(),
   slot_id             uuid not null references slots(id),
   member_id           uuid not null references members(id),
 
@@ -262,11 +258,8 @@ create table bookings (
   constraint guest_booking_requires_names check (
     is_guest_booking = false
     or (guest_name is not null and guest_email is not null)
-  ),
-  constraint cancellation_window check (
-    cancelled_at is null
-    or cancelled_at < (select starts_at - interval '2 hours' from slots where id = slot_id)
   )
+  -- cancellation_window (2 h before start) enforced in cancel_booking_atomic RPC
 );
 
 create trigger bookings_updated_at
@@ -283,7 +276,7 @@ create unique index bookings_one_active_per_member
 -- ============================================================
 
 create table booking_addons (
-  id                    uuid primary key default uuid_generate_v4(),
+  id                    uuid primary key default gen_random_uuid(),
   booking_id            uuid not null references bookings(id) on delete cascade,
   addon_type            addon_type not null,
   provider_availability_id uuid references provider_availability(id),  -- for lesson/sparring
@@ -293,19 +286,8 @@ create table booking_addons (
   constraint lesson_sparring_require_provider check (
     addon_type not in ('lesson', 'sparring')
     or provider_availability_id is not null
-  ),
-  constraint lights_tennis_only check (
-    addon_type != 'court_lights'
-    or exists (
-      select 1
-      from bookings b
-      join slots s on s.id = b.slot_id
-      join resources r on r.id = s.resource_id
-      where b.id = booking_id
-        and r.resource_type = 'tennis_court'
-        and extract(hour from s.starts_at at time zone 'America/Managua') >= 17
-    )
   )
+  -- lights_tennis_only enforced in create_booking_atomic RPC
 );
 
 -- ============================================================
@@ -313,7 +295,7 @@ create table booking_addons (
 -- ============================================================
 
 create table charges (
-  id                  uuid primary key default uuid_generate_v4(),
+  id                  uuid primary key default gen_random_uuid(),
   booking_id          uuid not null references bookings(id),
   amount_nio          numeric(10,2) not null check (amount_nio > 0),
   bac_transaction_id  text unique,          -- returned by BAC Credomatic
@@ -323,7 +305,7 @@ create table charges (
 );
 
 create table refunds (
-  id                  uuid primary key default uuid_generate_v4(),
+  id                  uuid primary key default gen_random_uuid(),
   charge_id           uuid not null references charges(id),
   amount_nio          numeric(10,2) not null check (amount_nio > 0),
   bac_refund_id       text unique,
@@ -334,7 +316,7 @@ create table refunds (
 
 -- Cancellation quota: tracks refunded cancellations per member per calendar month.
 create table cancellation_quota (
-  id              uuid primary key default uuid_generate_v4(),
+  id              uuid primary key default gen_random_uuid(),
   member_id       uuid not null references members(id),
   month           date not null,   -- always first day of the month
   refunded_count  integer not null default 0 check (refunded_count >= 0),
@@ -347,7 +329,7 @@ create table cancellation_quota (
 -- ============================================================
 
 create table strikes (
-  id              uuid primary key default uuid_generate_v4(),
+  id              uuid primary key default gen_random_uuid(),
   member_id       uuid not null references members(id),
   offense_type    offense_type not null,
   booking_id      uuid references bookings(id),
@@ -364,7 +346,7 @@ create table strikes (
 );
 
 create table sanctions (
-  id              uuid primary key default uuid_generate_v4(),
+  id              uuid primary key default gen_random_uuid(),
   member_id       uuid not null references members(id),
   offense_type    offense_type not null,
   sanction_type   sanction_type not null,
@@ -377,7 +359,7 @@ create table sanctions (
 
 -- Detected-but-unconfirmed abuse patterns queue (admin must confirm before a strike is issued).
 create table abuse_flags (
-  id              uuid primary key default uuid_generate_v4(),
+  id              uuid primary key default gen_random_uuid(),
   member_id       uuid not null references members(id),
   offense_type    offense_type not null,
   booking_id      uuid references bookings(id),
@@ -396,7 +378,7 @@ create table abuse_flags (
 create type news_audience as enum ('all', 'tennis', 'bowling');
 
 create table news_posts (
-  id          uuid primary key default uuid_generate_v4(),
+  id          uuid primary key default gen_random_uuid(),
   author_id   uuid not null references members(id),
   title       text not null,
   body        text not null,
@@ -415,7 +397,7 @@ create trigger news_posts_updated_at
 -- ============================================================
 
 create table ideas_inbox (
-  id              uuid primary key default uuid_generate_v4(),
+  id              uuid primary key default gen_random_uuid(),
   submitted_by    uuid references members(id),   -- null = anonymous (not allowed in v1)
   submitter_role  ideas_submitter_role not null,
   title           text not null,
@@ -437,121 +419,12 @@ create trigger ideas_inbox_updated_at
 -- ============================================================
 
 create table ad_placements (
-  id          uuid primary key default uuid_generate_v4(),
+  id          uuid primary key default gen_random_uuid(),
   surface_key text not null unique,   -- e.g. 'home_banner', 'booking_confirm_footer'
   label       text not null,
   is_active   boolean not null default false,  -- off by default until v2
   created_at  timestamptz not null default now()
 );
 
--- ============================================================
--- pg_cron JOBS
--- ============================================================
-
--- 1. Refresh age tiers at midnight (catches birthday rollovers).
-select cron.schedule(
-  'refresh-age-tiers',
-  '0 0 * * *',
-  $$
-    update members
-    set age_tier =
-      case
-        when date_of_birth is null then 'adult'
-        when age(date_of_birth) < interval '12 years' then 'under_12'
-        when age(date_of_birth) < interval '18 years' then 'minor'
-        else 'adult'
-      end
-    where is_dependent = true;
-  $$
-);
-
--- 2. Mark no-shows 15 minutes after slot start (runs every 5 minutes).
-select cron.schedule(
-  'mark-no-shows',
-  '*/5 * * * *',
-  $$
-    update bookings
-    set status = 'no_show'
-    where status = 'confirmed'
-      and checked_in_at is null
-      and exists (
-        select 1 from slots s
-        where s.id = slot_id
-          and s.starts_at + interval '15 minutes' < now()
-      );
-  $$
-);
-
--- 3. Erase expired strikes daily at 01:00.
-select cron.schedule(
-  'erase-expired-strikes',
-  '0 1 * * *',
-  $$
-    update strikes
-    set status = 'erased', erased_at = now()
-    where status = 'active'
-      and (
-        -- 1st strike: erased after 15 days
-        (
-          issued_at < now() - interval '15 days'
-          and not exists (
-            select 1 from strikes s2
-            where s2.member_id = strikes.member_id
-              and s2.offense_type = strikes.offense_type
-              and s2.status = 'active'
-              and s2.issued_at < strikes.issued_at
-          )
-        )
-        or
-        -- 2nd strike: erased after 30 days
-        (
-          issued_at < now() - interval '30 days'
-          and (
-            select count(*) from strikes s2
-            where s2.member_id = strikes.member_id
-              and s2.offense_type = strikes.offense_type
-              and s2.status = 'active'
-              and s2.issued_at < strikes.issued_at
-          ) = 1
-        )
-        or
-        -- 3rd strike: erased after 45 days
-        (
-          issued_at < now() - interval '45 days'
-          and (
-            select count(*) from strikes s2
-            where s2.member_id = strikes.member_id
-              and s2.offense_type = strikes.offense_type
-              and s2.status = 'active'
-              and s2.issued_at < strikes.issued_at
-          ) >= 2
-        )
-      );
-  $$
-);
-
--- 4. Generate monthly committee report on the 1st of each month at 08:00.
--- (Payload assembled and emailed by an Edge Function listening on pg_notify.)
-select cron.schedule(
-  'monthly-committee-report',
-  '0 8 1 * *',
-  $$ select pg_notify('committee_report_due', to_char(now(), 'YYYY-MM')); $$
-);
-
--- 5. Release slots for upcoming 7-day window (runs daily at 00:05).
-select cron.schedule(
-  'generate-slots',
-  '5 0 * * *',
-  $$
-    insert into slots (resource_id, starts_at)
-    select r.id, slot_time
-    from resources r
-    cross join generate_series(
-      date_trunc('day', now() + interval '7 days'),
-      date_trunc('day', now() + interval '7 days') + interval '16 hours',
-      interval '1 hour'
-    ) as slot_time(starts_at)
-    where r.is_active = true
-    on conflict (resource_id, starts_at) do nothing;
-  $$
-);
+-- pg_cron jobs are registered in migration 20241012000009_pg_cron_jobs.sql
+-- after pg_cron is enabled via the Supabase Dashboard.

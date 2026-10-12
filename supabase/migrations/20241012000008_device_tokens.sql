@@ -8,7 +8,7 @@
 -- cleaned up when FCM returns a "token not registered" error.
 
 create table device_tokens (
-  id          uuid primary key default uuid_generate_v4(),
+  id          uuid primary key default gen_random_uuid(),
   member_id   uuid not null references members(id) on delete cascade,
   token       text not null,
   platform    text not null check (platform in ('ios', 'android')),

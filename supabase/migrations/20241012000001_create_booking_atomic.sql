@@ -140,7 +140,7 @@ $$;
 -- ============================================================
 
 create table notification_queue (
-  id          uuid primary key default uuid_generate_v4(),
+  id          uuid primary key default gen_random_uuid(),
   type        text not null,
   payload     jsonb not null,
   channel     notification_channel not null,
