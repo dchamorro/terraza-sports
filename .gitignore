@@ -1,0 +1,24 @@
+node_modules
+
+# Next.js build output
+.next/
+out/
+
+# Build artefacts
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Environment files — never commit secrets
+.env
+.env.local
+.env.*.local
+
+# Bob internal artefacts
+.bob/
+
+# Flutter
+apps/mobile/.dart_tool/
+apps/mobile/build/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/pubspec.lock

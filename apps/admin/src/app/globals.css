@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── CSS custom properties (design tokens) ───────────────────────────────────
+   All values are in HSL so Tailwind's opacity modifier (bg-primary/50) works.
+   Swap these out when brand colors arrive from the design task.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    /* Neutral surface */
+    --background:       0 0% 100%;
+    --foreground:       222 20% 10%;
+
+    /* Cards / panels */
+    --card:             0 0% 100%;
+    --card-foreground:  222 20% 10%;
+
+    /* Borders */
+    --border:           220 13% 91%;
+
+    /* Muted text / backgrounds */
+    --muted:            220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    /* Primary action — placeholder blue, replace with brand color */
+    --primary:          221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary / ghost */
+    --secondary:        220 14% 96%;
+    --secondary-foreground: 222 20% 10%;
+
+    /* Destructive */
+    --destructive:      0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Accent */
+    --accent:           220 14% 96%;
+    --accent-foreground: 222 20% 10%;
+
+    /* Focus ring */
+    --ring:             221 83% 53%;
+
+    /* Border radius base */
+    --radius:           0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Consistent focus ring across interactive elements */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2;
+  }
+
+  /* Scrollbar (WebKit) — subtle, matches neutral palette */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-muted;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+}
