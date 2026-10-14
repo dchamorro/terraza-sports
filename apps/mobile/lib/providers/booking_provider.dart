@@ -77,7 +77,7 @@ class CreateBookingParams {
 /// Calls the create-booking Edge Function.
 /// Returns the response JSON map.
 Future<Map<String, dynamic>> createBooking(
-  Ref ref,
+  WidgetRef ref,
   CreateBookingParams params,
 ) async {
   final session = supabase.auth.currentSession;
@@ -108,7 +108,7 @@ Future<Map<String, dynamic>> createBooking(
 
 // ─── Cancel booking ───────────────────────────────────────────────────────────
 
-Future<void> cancelBooking(Ref ref, String bookingId) async {
+Future<void> cancelBooking(WidgetRef ref, String bookingId) async {
   final result = await supabase.functions.invoke(
     'cancel-booking',
     body: {'booking_id': bookingId},

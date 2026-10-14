@@ -184,17 +184,28 @@ serve(async (req: Request) => {
 
   try {
     const webhookBody = await req.json();
-    // Supabase DB webhook shape: { record: { id, type, payload, channel, processed } }
-    const row = webhookBody?.record as {
-      id: string;
-      type: string;
-      payload: Record<string, unknown>;
-      channel: "push" | "email";
-      processed: boolean;
-    } | undefined;
-
-    if (!row?.id) {
+    // Supabase DB webhook shape: { record: { id, ... } }
+    // We only trust the row id from the request body. The row itself is
+    // re-read from notification_queue so a caller holding the public anon key
+    // cannot forge a payload (e.g. send a guest_reservation_link email to an
+    // arbitrary address). Rows are written only by service-role Edge Functions.
+    const recordId = (webhookBody?.record as { id?: unknown } | undefined)?.id;
+    if (typeof recordId !== "string" || !recordId) {
       return new Response("No record in payload", { status: 400 });
+    }
+
+    const { data: row, error: rowError } = await supabaseAdmin
+      .from("notification_queue")
+      .select("id, type, payload, channel, processed")
+      .eq("id", recordId)
+      .maybeSingle();
+
+    if (rowError) {
+      console.error("send-notification: failed to load queue row:", rowError);
+      return new Response("Failed to load queue row", { status: 500 });
+    }
+    if (!row) {
+      return new Response("Unknown queue row", { status: 404 });
     }
 
     // Idempotency guard — skip rows already processed.
@@ -202,9 +213,11 @@ serve(async (req: Request) => {
       return new Response("Already processed", { status: 200 });
     }
 
-    rowId = row.id;
-    const { type, payload, channel } = row;
-    const template = buildTemplate(type, payload);
+    rowId = row.id as string;
+    const type = row.type as string;
+    const payload = (row.payload ?? {}) as Record<string, unknown>;
+    const channel = row.channel as "push" | "email";
+    const template = await buildTemplate(type, payload);
 
     if (channel === "push" && template.push) {
       const { title, body } = template.push;

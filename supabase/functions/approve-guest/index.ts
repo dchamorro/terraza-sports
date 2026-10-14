@@ -29,46 +29,10 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { supabaseAdmin } from "../_shared/supabase-admin.ts";
 import { ok, err, methodNotAllowed } from "../_shared/http.ts";
 import { resolveCaller } from "../_shared/auth.ts";
-
-// ---------------------------------------------------------------------------
-// Email token helpers
-// Signed tokens are HMAC-SHA256(booking_id + ":" + action, EMAIL_ACTION_SECRET)
-// encoded as base64url. This lets email buttons work without a login session.
-// ---------------------------------------------------------------------------
-
-const EMAIL_ACTION_SECRET = Deno.env.get("EMAIL_ACTION_SECRET") ?? "";
-
-async function verifyEmailToken(
-  bookingId: string,
-  action: string,
-  token: string
-): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(EMAIL_ACTION_SECRET),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["verify"]
-  );
-
-  const message = encoder.encode(`${bookingId}:${action}`);
-  const sig = base64urlDecode(token);
-
-  return crypto.subtle.verify("HMAC", keyMaterial, sig, message);
-}
-
-function base64urlDecode(s: string): ArrayBuffer {
-  // Convert base64url to standard base64
-  const b64 = s.replace(/-/g, "+").replace(/_/g, "/").padEnd(
-    s.length + ((4 - (s.length % 4)) % 4),
-    "="
-  );
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
-}
+import {
+  emailActionSecretConfigured,
+  verifyEmailActionToken,
+} from "../_shared/email-token.ts";
 
 // ---------------------------------------------------------------------------
 // Main handler
@@ -98,10 +62,10 @@ serve(async (req: Request) => {
 
   if (token) {
     // Email button path — verify HMAC token, no login required.
-    if (!EMAIL_ACTION_SECRET) {
+    if (!emailActionSecretConfigured()) {
       return err("Email action secret not configured", 500);
     }
-    authorised = await verifyEmailToken(booking_id, action, token);
+    authorised = await verifyEmailActionToken(booking_id, action, token);
     if (!authorised) return err("Invalid or expired approval token", 401);
   } else {
     // Web app path — must be admin or sports_manager.
@@ -191,7 +155,11 @@ function queueNotifications(
   EdgeRuntime.waitUntil(
     (async () => {
       try {
-        const rows = [
+        const rows: Array<{
+          type: string;
+          payload: Record<string, unknown>;
+          channel: "push" | "email";
+        }> = [
           {
             type: `booking_${decision}`,
             payload: { booking_id: bookingId, member_id: memberId, ...meta },

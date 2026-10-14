@@ -31,9 +31,11 @@ async function verifyBacSignature(
   signatureHeader: string | null
 ): Promise<boolean> {
   if (!BAC_WEBHOOK_SECRET) {
-    // If not configured, skip verification in development only.
-    console.warn("[BAC stub] BAC_WEBHOOK_SECRET not set — skipping signature verification");
-    return true;
+    // Fail closed. An unverified webhook could cancel any confirmed booking
+    // ("payment.failed") or mark charges captured. Set BAC_WEBHOOK_SECRET
+    // before exposing this function.
+    console.error("[BAC webhook] BAC_WEBHOOK_SECRET not set — rejecting request");
+    return false;
   }
 
   if (!signatureHeader) return false;

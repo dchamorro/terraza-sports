@@ -21,3 +21,13 @@ export function canApproveBookings(role: AppRole) {
 export function canEditPrices(role: AppRole) {
   return isSportsManager(role);
 }
+
+/**
+ * Roles allowed to open the admin panel at all.
+ * Members, coaches and sparring partners use the mobile app only.
+ * Committee is read-only: pages render, but every mutating route handler
+ * checks for admin / sports_manager explicitly.
+ */
+export function canAccessAdminPanel(role: AppRole) {
+  return isAdminOrAbove(role) || role === "committee";
+}
