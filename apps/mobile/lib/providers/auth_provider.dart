@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/supabase.dart';
-import '../main.dart' show navigatorKey;
+import '../main.dart' show firebaseReady, navigatorKey;
 import '../models/member.dart';
 import '../services/notification_service.dart';
 
@@ -46,12 +46,14 @@ class AuthActions {
     // Invalidate cached member so it re-fetches after login.
     _ref.invalidate(currentMemberProvider);
     // Register FCM token now that a session exists.
-    await NotificationService.init(navigatorKey: navigatorKey);
+    if (firebaseReady) {
+      await NotificationService.init(navigatorKey: navigatorKey);
+    }
   }
 
   Future<void> signOut() async {
     // Delete the FCM token before clearing the session.
-    await NotificationService.dispose();
+    if (firebaseReady) await NotificationService.dispose();
     await supabase.auth.signOut();
     _ref.invalidate(currentMemberProvider);
   }
