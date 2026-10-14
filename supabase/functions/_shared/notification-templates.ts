@@ -5,6 +5,8 @@
 // Payload shapes mirror what the existing Edge Functions insert into
 // notification_queue.payload.
 
+import { signEmailActionToken } from "./email-token.ts";
+
 export interface PushMessage {
   title: string;
   body: string;
@@ -39,10 +41,10 @@ function fmtNio(amount: number): string {
 
 // ── Template registry ─────────────────────────────────────────────────────────
 
-export function buildTemplate(
+export async function buildTemplate(
   type: string,
   payload: Record<string, unknown>
-): NotificationTemplate {
+): Promise<NotificationTemplate> {
   switch (type) {
     // ── Booking confirmed ──────────────────────────────────────────────
     case "booking_confirmed": {
@@ -145,7 +147,7 @@ export function buildTemplate(
                 <strong>Ver en el panel</strong>
               </a>
             </p>
-            ${approvalButtons(bookingId, baseUrl)}
+            ${await approvalButtons(bookingId, baseUrl)}
           `),
         },
       };
@@ -163,7 +165,7 @@ export function buildTemplate(
             <h2>Solicitud de reservación para invitado</h2>
             <p>Un miembro solicita traer a <strong>${guestName}</strong>
                como invitado.</p>
-            ${approvalButtons(bookingId, baseUrl)}
+            ${await approvalButtons(bookingId, baseUrl)}
           `),
         },
       };
@@ -274,15 +276,19 @@ function emailWrapper(content: string): string {
 }
 
 /** Approve / Decline action buttons embedded in admin approval emails. */
-function approvalButtons(bookingId: string, baseUrl: string): string {
-  const fnUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const secret = Deno.env.get("EMAIL_ACTION_SECRET") ?? "";
-
-  // We generate signed tokens here so the email buttons work without a login session.
-  // The actual HMAC signing is async, so we embed a Vercel Route Handler URL that
-  // handles the action (it re-signs server-side before calling approve-guest).
-  const approveUrl = `${baseUrl}/api/email-action?booking_id=${bookingId}&action=approve`;
-  const declineUrl = `${baseUrl}/api/email-action?booking_id=${bookingId}&action=decline`;
+async function approvalButtons(bookingId: string, baseUrl: string): Promise<string> {
+  // Each button carries an HMAC token bound to (booking_id, action). The admin
+  // panel's /api/email-action route forwards it unchanged to approve-guest,
+  // which verifies it — so the buttons work without a login session but
+  // cannot be forged by anyone who merely knows a booking id.
+  const [approveToken, declineToken] = await Promise.all([
+    signEmailActionToken(bookingId, "approve"),
+    signEmailActionToken(bookingId, "decline"),
+  ]);
+  const approveUrl =
+    `${baseUrl}/api/email-action?booking_id=${bookingId}&action=approve&token=${approveToken}`;
+  const declineUrl =
+    `${baseUrl}/api/email-action?booking_id=${bookingId}&action=decline&token=${declineToken}`;
 
   return `
     <div style="margin-top:24px;">

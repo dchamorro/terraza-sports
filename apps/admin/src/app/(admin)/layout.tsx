@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
+import { canAccessAdminPanel, type AppRole } from "@/lib/roles";
 
 export default async function AdminShellLayout({
   children,
@@ -22,6 +23,10 @@ export default async function AdminShellLayout({
     .single();
 
   if (!member) redirect("/login");
+
+  // Every page under (admin) queries with the service-role client, so the
+  // role gate must happen here — a plain member must never reach the shell.
+  if (!canAccessAdminPanel(member.role as AppRole)) redirect("/unauthorized");
 
   return (
     <div className="flex h-screen overflow-hidden">
